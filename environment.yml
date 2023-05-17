@@ -1,0 +1,14 @@
+name: out_of_core
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip>=21.1.2
+  - mpich
+  - pip:
+    - mpi4py
+    - h5py
+    - scikit-image
+    - matplotlib
+    - git+https://github.com/speglich/devito.git@ac2b8f60ee8b9faa39b935d0f0dd40c6a9842997
