@@ -509,14 +509,13 @@ def plot_results(path, output):
     for e in experiments:
 
         dfs = open(path, experiments[e])
-
         for mode in dfs:
 
             if dfs[mode] is None:
                 continue
 
             png_folder, tex_folder = create_dirs(output, experiments[e], mode)
-
+            
             plot_args = {}
             plot_args['png_folder'] = png_folder
             plot_args['tex_folder'] = tex_folder
@@ -530,10 +529,10 @@ if __name__ == '__main__':
 
     parser = ArgumentParser(description=description)
 
-    parser.add_argument("-path", "--path", default='/app/results',
+    parser.add_argument("-path", "--path", default='/home/gabriel.pinheiro/workspace/forkOfc/offloading-to-nvme/results',
                     type=str, help="Path to result dir")
 
-    parser.add_argument("-output", "--output", default='/app/results/figures',
+    parser.add_argument("-output", "--output", default='results/figures',
                 type=str, help="Path to result dir")
 
     args = parser.parse_args()

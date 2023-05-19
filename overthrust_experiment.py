@@ -44,7 +44,7 @@ def operatorInjector(op, payload):
 
     return
 
-def overthrust_setup(filename, kernel='OT2', tn=1000, src_coordinates=None,
+def overthrust_setup(filename, kernel='OT2', tn=100, src_coordinates=None,
                      space_order=2, datakey='m0', nbpml=40, dtype=np.float32,
                      **kwargs):
     model = from_hdf5(filename, space_order=space_order, nbpml=nbpml,

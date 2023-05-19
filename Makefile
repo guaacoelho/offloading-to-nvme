@@ -4,7 +4,9 @@ $(colon) := :
 DISKS := 8
 MPIDISKS := 4
 OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
+OUTPUT_PATH := $(shell realpath $(OUTPUT_DIR))
 
+#SHELL := /bin/bash
 nfs: create-env model nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
 test: create-env model disks output-dir 1SOCKET plot
 
@@ -13,7 +15,7 @@ test: create-env model disks output-dir 1SOCKET plot
 output-dir:
 	mkdir -p $(OUTPUT_DIR)
 
-model: overthrust_3D_initial_model.h5
+model: 
 	wget -nc ftp://slim.gatech.edu/data/SoftwareRelease/WaveformInversion.jl/3DFWI/overthrust_3D_initial_model.h5
 
 create-env:
@@ -23,13 +25,12 @@ activate:
 	source /opt/share/anaconda3/2020.07/bin/activate out_of_core
 
 nfs-disks:
-	mkdir -p data
-	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), umount /dev/nvme$(n)n1 || /bin/true;)
-	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), mkdir -p data/nvme$(n);)
-
+	mkdir -p /scr01/data
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), mkdir -p /scr01/data/nvme$(n);)
+	ln -s /scr01/data data
 # EXPERIMENTS
 
-1SOCKET: create-env model output-dir ram
+1SOCKET: output-dir ram
 
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/forward
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/adjoint
@@ -130,7 +131,7 @@ test: create-env model
 	DEVITO_LOGGING=DEBUG \
 	time numactl --cpubind=0  python3 tests/gradient_test.py
 
-ram: create-env model
+ram: 
 	rm -rf data/nvme*/*
 	DEVITO_OPT=advanced \
 	DEVITO_LANGUAGE=openmp \
@@ -154,8 +155,12 @@ ram-mpi: create-env model
 
 
 ## PLOT RESULTS ##
-plot:
-	python3 plot/generate.py --path=$(OUTPUT_DIR)
+plott:
+	python3 plot/generate.py --path=/home/gabriel.pinheiro/workspace/forkOfc/offloading-to-nvme/results/2023-05-18--14-47-08
+	#python3 plot/generate.py --path=$(OUTPUT_PATH)
+
+#plot-graph:
+	# python3 plot/generate.py --path=$(OUTPUT_PATH)
 
 clean:
 	rm -rf results
