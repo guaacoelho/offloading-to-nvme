@@ -529,7 +529,7 @@ if __name__ == '__main__':
 
     parser = ArgumentParser(description=description)
 
-    parser.add_argument("-path", "--path", default='/home/gabriel.pinheiro/workspace/forkOfc/offloading-to-nvme/results',
+    parser.add_argument("-path", "--path", default='results',
                     type=str, help="Path to result dir")
 
     parser.add_argument("-output", "--output", default='results/figures',

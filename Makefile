@@ -7,8 +7,8 @@ OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
 OUTPUT_PATH := $(shell realpath $(OUTPUT_DIR))
 
 #SHELL := /bin/bash
-nfs: create-env model nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
-test: create-env model disks output-dir 1SOCKET plot
+nfs: model nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
+test: model disks output-dir 1SOCKET plot
 
 # ENVIRONMENT
 
@@ -21,13 +21,12 @@ model:
 create-env:
 	conda env create -f environment.yml
 
-activate:
-	source /opt/share/anaconda3/2020.07/bin/activate out_of_core
-
 nfs-disks:
 	mkdir -p /scr01/data
 	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), mkdir -p /scr01/data/nvme$(n);)
 	ln -s /scr01/data data
+
+
 # EXPERIMENTS
 
 1SOCKET: output-dir ram
@@ -155,12 +154,8 @@ ram-mpi: create-env model
 
 
 ## PLOT RESULTS ##
-plott:
-	python3 plot/generate.py --path=/home/gabriel.pinheiro/workspace/forkOfc/offloading-to-nvme/results/2023-05-18--14-47-08
-	#python3 plot/generate.py --path=$(OUTPUT_PATH)
-
-#plot-graph:
-	# python3 plot/generate.py --path=$(OUTPUT_PATH)
+plots:
+	python3 plot/generate.py --path=$(OUTPUT_PATH)
 
 clean:
 	rm -rf results

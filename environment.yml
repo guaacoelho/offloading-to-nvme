@@ -10,5 +10,8 @@ dependencies:
     - mpi4py
     - h5py
     - scikit-image
-    - matplotlib
+    - matplotlib==3.5.0
+    - pandas
+    - numpy
+    - tikzplotlib
     - git+https://github.com/speglich/devito.git@ac2b8f60ee8b9faa39b935d0f0dd40c6a9842997
