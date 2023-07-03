@@ -1,6 +1,21 @@
+#define _GNU_SOURCE
+#include "fcntl.h"
+
 #define _POSIX_C_SOURCE 200809L
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
 #define START_TIMER(S) struct timeval start_ ## S , end_ ## S ; gettimeofday(&start_ ## S , NULL);
 #define STOP_TIMER(S,T) gettimeofday(&end_ ## S, NULL); T->S += (double)(end_ ## S .tv_sec-start_ ## S.tv_sec)+(double)(end_ ## S .tv_usec-start_ ## S .tv_usec)/1000000;
+
+#ifndef NDISKS
+#define NDISKS 8
+#endif
+
+#ifdef CACHE
+#define OPEN_FLAGS O_WRONLY | O_CREAT
+#else
+#define OPEN_FLAGS O_DIRECT | O_WRONLY | O_CREAT
+#endif
 
 #include "stdlib.h"
 #include "math.h"
@@ -8,6 +23,8 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
 
 struct dataobj
 {
@@ -28,6 +45,61 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double write;
+  double close;
+} ;
+
+void open_thread_files(int *files, int nthreads)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+    int nvme_id = i % NDISKS;
+    char name[100];
+
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    printf("Creating file %s\n", name);
+
+    if ((files[i] = open(name, OPEN_FLAGS ,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+  }
+
+}
+
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int write_size)
+{
+  printf(">>>>>>>>>>>>>> FORWARD <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+
+  printf("[FWD] Section0 %.2lf s\n", timers->section0);
+  printf("[FWD] Section1 %.2lf s\n", timers->section1);
+  printf("[FWD] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IO] Open %.2lf s\n", iop->open);
+  printf("[IO] Write %.2lf s\n", iop->write);
+  printf("[IO] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "fwd_disks_%d_threads_%d.csv", NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, Bytes, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IO] Open, [IO] Write, [IO] Close\n");
+
+  fprintf(fpt,"%d, %d, %ld, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, write_size,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->write, iop->close);
+
+  fclose(fpt);
+}
 
 int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const float dt, const float o_x, const float o_y, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
@@ -45,6 +117,27 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 
   float r4 = 1.0F/(dt*dt);
   float r5 = 1.0F/dt;
+
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
+
+  iop->open = 0;
+  iop->write = 0;
+  iop->close = 0;
+
+  /* Begin Open Files Section */
+  START_TIMER(open)
+
+  int *files = malloc(nthreads * sizeof(int));
+  if (files == NULL)
+  {
+      printf("Error to alloc\n");
+      exit(1);
+  }
+  open_thread_files(files, nthreads);
+
+  STOP_TIMER(open, iop)
+
+  size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
   for (int time = time_m; time <= time_M; time += 1)
   {
