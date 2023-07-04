@@ -7,16 +7,6 @@
 #define START_TIMER(S) struct timeval start_ ## S , end_ ## S ; gettimeofday(&start_ ## S , NULL);
 #define STOP_TIMER(S,T) gettimeofday(&end_ ## S, NULL); T->S += (double)(end_ ## S .tv_sec-start_ ## S.tv_sec)+(double)(end_ ## S .tv_usec-start_ ## S .tv_usec)/1000000;
 
-#ifndef NDISKS
-#define NDISKS 8
-#endif
-
-#ifdef CACHE
-#define OPEN_FLAGS O_WRONLY | O_CREAT
-#else
-#define OPEN_FLAGS O_DIRECT | O_WRONLY | O_CREAT
-#endif
-
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -52,18 +42,18 @@ struct io_profiler
   double close;
 } ;
 
-void open_thread_files(int *files, int nthreads)
+void open_thread_files(int *files, int nthreads, int ndisks)
 {
 
   for(int i=0; i < nthreads; i++)
   {
-    int nvme_id = i % NDISKS;
+    int nvme_id = i % ndisks;
     char name[100];
 
     sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
     printf("Creating file %s\n", name);
 
-    if ((files[i] = open(name, OPEN_FLAGS ,
+    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
         perror("Cannot open output file\n"); exit(1);
@@ -75,7 +65,7 @@ void open_thread_files(int *files, int nthreads)
 void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int write_size)
 {
   printf(">>>>>>>>>>>>>> FORWARD <<<<<<<<<<<<<<<<<\n");
-
+  int NDISKS = 1;
   printf("Threads %d\n", nthreads);
   printf("Disks %d\n", NDISKS);
 
@@ -120,6 +110,8 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 
   struct io_profiler * iop = malloc(sizeof(struct io_profiler));
 
+  int fd = open("test.txt", O_WRONLY | O_TRUNC | O_CREAT, 0640);
+
   iop->open = 0;
   iop->write = 0;
   iop->close = 0;
@@ -133,11 +125,11 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
       printf("Error to alloc\n");
       exit(1);
   }
-  open_thread_files(files, nthreads);
+  open_thread_files(files, nthreads, 1);
 
   STOP_TIMER(open, iop)
 
-  size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
+  size_t u_size = u_vec->size[2]*sizeof(float);
 
   for (int time = time_m; time <= time_M; time += 1)
   {
@@ -242,7 +234,25 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
-  }
+    // int t2 = time;
+    // #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    // for(int i=0; i < u_vec->size[1];i++)
+    // {
+    //   int tid = i%nthreads;
+    //   printf("thread file: %d\n", tid);
+    //   printf("Numero do identificador do arquivo: %d\n\n", files[tid]);
+    //   int ret = write(fd, u[t2][i], u_size);
 
+    //   if (ret != u_size) {
+    //       perror("Cannot open output file");
+    //       exit(1);
+    //   }
+    // }
+
+    STOP_TIMER(section2,timers)
+  }
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
+  }
   return 0;
 }
