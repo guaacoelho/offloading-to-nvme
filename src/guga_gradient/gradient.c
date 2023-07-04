@@ -8,6 +8,9 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -28,6 +31,28 @@ struct profiler
   double section2;
 } ;
 
+void open_thread_files(int *files, int nthreads, int ndisks)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+    int nvme_id = i % ndisks;
+    char name[100];
+
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    printf("Reading file %s\n", name);
+    
+    if ((files[i] = open(name, O_RDONLY,
+        S_IRUSR)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+    else{
+      printf("Descritor do arquivo %d: %d\n",i, files[i]);
+    }
+  }
+
+}
 
 int Gradient(struct dataobj *restrict damp_vec, struct dataobj *restrict grad_vec, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict v_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const float dt, const float o_x, const float o_y, const int p_rec_M, const int p_rec_m, const int time_M, const int time_m, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
@@ -45,7 +70,31 @@ int Gradient(struct dataobj *restrict damp_vec, struct dataobj *restrict grad_ve
 
   float r4 = 1.0F/(dt*dt);
   float r5 = 1.0F/dt;
+  printf("Using nthreads %d\n", nthreads);
 
+  int *files = malloc(nthreads * sizeof(int));
+
+  if (files == NULL)
+  {
+      printf("Error to alloc (files)\n");
+      exit(1);
+  }
+
+  open_thread_files(files, nthreads, 4);
+
+  int *counters = malloc(nthreads * sizeof(int));
+
+  if (counters == NULL)
+  {
+      printf("Error to alloc (counters) \n");
+      exit(1);
+  }
+
+  for(int i=0; i < nthreads; i++){
+    counters[i] = 1;
+  }
+
+  size_t u_size = u_vec->size[2]*sizeof(float);
   for (int time = time_M, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time >= time_m; time -= 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
     /* Begin section0 */
@@ -111,6 +160,25 @@ int Gradient(struct dataobj *restrict damp_vec, struct dataobj *restrict grad_ve
     STOP_TIMER(section1,timers)
     /* End section1 */
 
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    for(int i= u_vec->size[1]-1;i>=0;i--)
+    {
+      int tid = i%nthreads;
+
+      off_t offset = counters[tid] * u_size;
+      lseek(files[tid], -1 * offset, SEEK_END);
+
+      int ret = read(files[tid], u[t0][i], u_size);
+
+      if (ret != u_size) {
+          printf("valor de ret: %d\n\n", ret);
+          perror("Cannot read data file");
+          exit(1);
+      }
+
+      counters[tid]++;
+    }
+
     /* Begin section2 */
     START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads)
@@ -121,12 +189,15 @@ int Gradient(struct dataobj *restrict damp_vec, struct dataobj *restrict grad_ve
         #pragma omp simd aligned(grad,u,v:64)
         for (int y = y_m; y <= y_M; y += 1)
         {
-          grad[x + 1][y + 1] += -(r4*(-2.0F*v[t0][x + 4][y + 4]) + r4*v[t1][x + 4][y + 4] + r4*v[t2][x + 4][y + 4])*u[time][x + 4][y + 4];
+          grad[x + 1][y + 1] += -(r4*(-2.0F*v[t0][x + 4][y + 4]) + r4*v[t1][x + 4][y + 4] + r4*v[t2][x + 4][y + 4])*u[t0][x + 4][y + 4];
         }
       }
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
+  }
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
   }
 
   return 0;

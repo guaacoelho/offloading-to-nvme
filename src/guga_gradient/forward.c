@@ -110,8 +110,6 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 
   struct io_profiler * iop = malloc(sizeof(struct io_profiler));
 
-  int fd = open("test.txt", O_WRONLY | O_TRUNC | O_CREAT, 0640);
-
   iop->open = 0;
   iop->write = 0;
   iop->close = 0;
@@ -125,7 +123,7 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
       printf("Error to alloc\n");
       exit(1);
   }
-  open_thread_files(files, nthreads, 1);
+  open_thread_files(files, nthreads, 4);
 
   STOP_TIMER(open, iop)
 
@@ -234,20 +232,20 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
-    // int t2 = time;
-    // #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    // for(int i=0; i < u_vec->size[1];i++)
-    // {
-    //   int tid = i%nthreads;
-    //   printf("thread file: %d\n", tid);
-    //   printf("Numero do identificador do arquivo: %d\n\n", files[tid]);
-    //   int ret = write(fd, u[t2][i], u_size);
+    int t2 = time;
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    for(int i=0; i < u_vec->size[1];i++)
+    {
+      int tid = i%nthreads;
+      // printf("thread file: %d\n", tid);
+      // printf("Numero do identificador do arquivo: %d\n\n", files[tid]);
+      int ret = write(files[tid], u[t2][i], u_size);
 
-    //   if (ret != u_size) {
-    //       perror("Cannot open output file");
-    //       exit(1);
-    //   }
-    // }
+      if (ret != u_size) {
+          perror("Cannot open output file");
+          exit(1);
+      }
+    }
 
     STOP_TIMER(section2,timers)
   }

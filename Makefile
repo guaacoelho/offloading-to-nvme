@@ -1,7 +1,7 @@
 colon := :
 $(colon) := :
 
-DISKS := 8
+DISKS := 4
 MPIDISKS := 4
 OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
 OUTPUT_PATH := $(shell realpath $(OUTPUT_DIR))
@@ -29,30 +29,28 @@ nfs-disks:
 
 # EXPERIMENTS
 
-1SOCKET: output-dir ram
+1SOCKET: 
 
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/forward
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/adjoint
 
-	$(MAKE) ram
+# $(MAKE) ram
 
-	@for DISK in $$(seq 1 $(DISKS)); do \
-		echo "Running Adjoint to $$DISK disk (s)!"; \
-		rm -rf data/nvme*/*; \
-		DEVITO_OPT=advanced \
-		DEVITO_LANGUAGE=openmp \
-		DEVITO_PLATFORM=skx \
-		OMP_NUM_THREADS=18 \
-		OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17}" \
-		DEVITO_LOGGING=DEBUG \
-		time numactl --cpubind=0 python3 overthrust_experiment.py --disks=$$DISK; \
-	done
+#@for DISK in $$(seq 1 $(DISKS)); do 
+	echo "Running Adjoint to 4 disk (s)!"; \
+	rm -rf data/nvme*/*; \
+	DEVITO_OPT=advanced \
+	DEVITO_LANGUAGE=openmp \
+	OMP_NUM_THREADS=8 \
+	DEVITO_LOGGING=DEBUG \
+	time numactl --cpubind=0 python3 gradient_experiment.py --disks=4;
+#done
 
 	mv fwd*.csv $(OUTPUT_DIR)/1SOCKET/forward
 	mv rev*.csv $(OUTPUT_DIR)/1SOCKET/adjoint
 
 
-1SOCKET-CACHE: create-env model output-dir ram
+1SOCKET-CACHE: output-dir ram
 
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/cache/forward
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/cache/adjoint
